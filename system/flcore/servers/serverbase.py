@@ -138,10 +138,11 @@ class Server(object):
     def aggregate_parameters(self):
         assert (len(self.uploaded_models) > 0)
 
+        # 复制模型参数, 但是之后进行了归零, 得到了一个空白模型
         self.global_model = copy.deepcopy(self.uploaded_models[0])
         for param in self.global_model.parameters():
             param.data.zero_()
-            
+        # 进行加权聚合
         for w, client_model in zip(self.uploaded_weights, self.uploaded_models):
             self.add_parameters(w, client_model)
 
@@ -150,7 +151,7 @@ class Server(object):
             server_param.data += client_param.data.clone() * w
 
     def save_global_model(self):
-        model_path = os.path.join("models", self.dataset)
+        model_path = os.path.join("../models", self.dataset)
         if not os.path.exists(model_path):
             os.makedirs(model_path)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
