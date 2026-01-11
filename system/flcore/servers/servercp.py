@@ -78,7 +78,7 @@ class FedCP(Server):
             self.selected_clients = self.select_clients()
 
             if i%self.eval_gap == 0:
-                print(f"\n-------------Round number: {i}-------------")
+                print(f"\nRound number: {i}","-"*20)
                 print("\nEvaluate before local training")
                 self.evaluate()
 

@@ -44,7 +44,7 @@ class FedPAC(Server):
                 self.Hs.append(client.h)
 
             if i%self.eval_gap == 0:
-                print(f"\n-------------Round number: {i}-------------")
+                print(f"\nRound number: {i}","-"*20)
                 print("\nEvaluate personalized models")
                 self.evaluate()
 
@@ -200,10 +200,10 @@ def solve_quadratic(num_users, Vars, Hs):
     d = Hs[0].shape[1] # dimension of feature representation
     avg_weight = []
     for i in range(num_users):
-        # ---------------------------------------------------------------------------
+        # ----------
         # variance ter
         v = torch.tensor(Vars, device=device)
-        # ---------------------------------------------------------------------------
+        # ----------
         # bias term
         h_ref = Hs[i]
         dist = torch.zeros((num_users, num_users), device=device)

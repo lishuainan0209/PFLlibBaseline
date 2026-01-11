@@ -14,6 +14,7 @@ alpha = 0.1 # for Dirichlet distribution. 100 for exdir
 def check(config_path, train_path, test_path, num_clients, niid=False, 
         balance=True, partition=None):
     # check existing dataset
+    # 如果存在json,就检查之
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
             config = ujson.load(f)
@@ -25,7 +26,7 @@ def check(config_path, train_path, test_path, num_clients, niid=False,
             config['batch_size'] == batch_size:
             print("\nDataset already generated.\n")
             return True
-
+    # 不存在json,就创建train,test
     dir_path = os.path.dirname(train_path)
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)

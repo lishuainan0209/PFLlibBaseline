@@ -25,7 +25,7 @@ class Local(Server):
             self.selected_clients = self.select_clients()
 
             if i%self.eval_gap == 0:
-                print(f"\n-------------Round number: {i}-------------")
+                print(f"\nRound number: {i}","-"*20)
                 print("\nEvaluate personalized models")
                 self.evaluate()
 
@@ -39,7 +39,7 @@ class Local(Server):
             # [t.join() for t in threads]
 
             self.Budget.append(time.time() - s_t)
-            print('-'*25, 'time cost', '-'*25, self.Budget[-1])
+            print( 'time cost:', self.Budget[-1], '-'*25)
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break

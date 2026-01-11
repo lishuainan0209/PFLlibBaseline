@@ -102,7 +102,8 @@ def generate_dataset(dataset, meta_path, save_path,  num_clients, num_classes, n
     config_path = os.path.join(save_path, 'config.json')
     train_path = os.path.join(save_path, 'train')
     test_path = os.path.join(save_path, 'test')
-    
+
+    # 如果文件存在, 不必生成
     if check(config_path, train_path, test_path, num_clients, num_classes, niid, balance, partition):
         return
 

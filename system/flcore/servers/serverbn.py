@@ -27,7 +27,7 @@ class FedBN(Server):
             self.send_models()
 
             if i%self.eval_gap == 0:
-                print(f"\n-------------Round number: {i}-------------")
+                print(f"\nRound number: {i}","-"*20)
                 print("\nEvaluate personalized models")
                 self.evaluate()
 
@@ -43,7 +43,7 @@ class FedBN(Server):
             self.aggregate_parameters()
 
             self.Budget.append(time.time() - s_t)
-            print('-'*25, 'time cost', '-'*25, self.Budget[-1])
+            print( 'time cost:', self.Budget[-1], '-'*25)
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break
@@ -60,6 +60,6 @@ class FedBN(Server):
         if self.num_new_clients > 0:
             self.eval_new_clients = True
             self.set_new_clients(clientBN)
-            print(f"\n-------------Fine tuning round-------------")
+            print(f"\nFine tuning round","-"*20)
             print("\nEvaluate new clients")
             self.evaluate()
