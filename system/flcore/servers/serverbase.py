@@ -101,6 +101,7 @@ class Server(object):
         return selected_clients
 
     def send_models(self):
+        # 将模型下发到所有客户端
         assert (len(self.clients) > 0)
 
         for client in self.clients:

@@ -22,7 +22,7 @@ class FedFomo(Server):
         self.M = min(args.M, self.num_join_clients)
         self.client_models = [copy.deepcopy(self.global_model) for _ in range(self.num_clients)]
             
-        print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
+        print(f"\ntotal clients:{self.num_clients}, Join ratio:{self.join_ratio} ")
         print("Finished creating server and clients.")
         self.Budget = []
 

@@ -34,7 +34,7 @@ class FedDBE(Server):
         for client in self.selected_clients:
             client.global_mean = global_mean.data.clone()
 
-        print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
+        print(f"\ntotal clients:{self.num_clients}, Join ratio:{self.join_ratio} ")
         print("Finished creating server and clients.")
 
         # self.load_model()

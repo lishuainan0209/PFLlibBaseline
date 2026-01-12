@@ -20,7 +20,7 @@ class FedAMP(Server):
         self.alphaK = args.alphaK
         self.sigma = args.sigma
 
-        print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
+        print(f"\ntotal clients:{self.num_clients}, Join ratio:{self.join_ratio} ")
         print("Finished creating server and clients.")
         self.Budget = []
 

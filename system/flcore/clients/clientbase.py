@@ -43,6 +43,9 @@ class Client(object):
         self.train_time_cost = {'num_rounds': 0, 'total_cost': 0.0}
         self.send_time_cost = {'num_rounds': 0, 'total_cost': 0.0}
 
+        # 交叉熵损失函数,预测结果不需要手动限制到 0-1, nn.CrossEntropyLoss内部会自动完成两个关键步骤（无需提前对输出做 softmax）：
+        # 对输出的 n 通道 logits 做softmax，将每个像素的 n 个通道值转换为0-1 的概率分布（所有通道概率和为 1）；
+        # 计算该概率分布相对于标签的「负对数似然损失」（即交叉熵）。
         self.loss = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(

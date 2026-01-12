@@ -12,7 +12,7 @@ class FedNTD(Server):
         self.set_slow_clients()
         self.set_clients(clientNTD)
 
-        print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
+        print(f"\ntotal clients:{self.num_clients}, Join ratio:{self.join_ratio} ")
         print("Finished creating server and clients.")
 
         # self.load_model()
