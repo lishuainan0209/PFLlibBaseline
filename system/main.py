@@ -406,15 +406,21 @@ def run(args):
 
 
 def get_args():
+    """
+    nohup python main.py --seed=0 --device_id=3 \
+    --num_clients=10 \
+    --global_rounds=4 --local_epochs=2 --batch_size=4 \
+        > $(date +%Y%m%d_%H%M%S).log 2>&1 &
+    """
     parser = argparse.ArgumentParser(description="PFLlib 联邦学习实验参数配置")
     # action = "store_true"
     # 开启该参数（设为    True）：命令行中只写参数名（无需加 = True / 1    等值）；
     # 关闭该参数（设为    False）：命令行中不写该参数即可（默认值就是    False）。
     # ===================== 1. 实验基础配置（全局通用） =====================
     parser.add_argument("-go", "--goal", type=str, default="test", help="实验目标：如 'test'（测试）、'train'（训练）、'privacy_analysis'（隐私分析）等", )
-    parser.add_argument("-dev", "--device", type=str, default="cuda", choices=["cpu", "cuda"], help="训练设备：cpu/cuda（优先用GPU）")
     parser.add_argument("-sd", "--seed", type=int, default=0, help="随机数种子：固定种子保证实验可复现")
-    parser.add_argument("-did", "--device_id", type=str, default="0", help="GPU卡号（多GPU场景）：如 '0'（单卡）、'0,1'（多卡），仅device=cuda时生效")
+    parser.add_argument("-dev", "--device", type=str, default="cuda", choices=["cpu", "cuda"], help="训练设备：cpu/cuda（优先用GPU）")
+    parser.add_argument("-did", "--device_id", type=str, default="3", help="GPU卡号（多GPU场景）：如 '0'（单卡）、'0,1'（多卡），仅device=cuda时生效")
 
     # ===================== 2. 数据集相关 =====================
     parser.add_argument("-data", "--dataset", type=str, default="2021LoveDA_Rural", help="数据集名称：如 MNIST/CIFAR10/Shakespeare/AG_News 等")
@@ -431,11 +437,11 @@ def get_args():
     # ===================== 4. 联邦训练核心参数 =====================
     parser.add_argument("-pv", "--prev", type=int, default=0, help="断点续跑：之前中断的实验轮数，设置后从该轮继续训练（避免重复跑）")
     parser.add_argument("-t", "--times", type=int, default=1, help="实验重复次数：多次运行取平均，提升结果可靠性")
-    parser.add_argument("-gr", "--global_rounds", type=int, default=1, help="全局聚合轮数：一次实验的总联邦通信轮数")
+    parser.add_argument("-gr", "--global_rounds", type=int, default=2, help="全局聚合轮数：一次实验的总联邦通信轮数")
     parser.add_argument("-ls", "--local_epochs", type=int, default=1, help="客户端本地训练轮数：每轮联邦通信中，单个客户端本地训练的epoch数")
-    parser.add_argument("-bnpc", "--batch_num_per_client", type=int, default=2, help="客户端每轮训练批次数：模拟算力受限，仅训练指定批次（而非全量数据）", )
-    parser.add_argument("-lbs", "--batch_size", type=int, default=2, help="客户端训练批次大小：每个batch的样本数量")
+    parser.add_argument("-lbs", "--batch_size", type=int, default=4, help="客户端训练批次大小：每个batch的样本数量")
 
+    parser.add_argument("-bnpc", "--batch_num_per_client", type=int, default=2, help="客户端每轮训练批次数：模拟算力受限，仅训练指定批次（而非全量数据）", )
     # ===================== 5. 模型/算法配置 =====================
     parser.add_argument("-m", "--model", type=str, default="FCN8s", help="模型架构：如 CNN（图像）、LSTM/Transformer（文本）等")
     parser.add_argument("-algo", "--algorithm", type=str, default="LoveDA2021RuralFedAvg", help="联邦聚合策略：FedAvg/FedProx/FedBN/FedPer 等")

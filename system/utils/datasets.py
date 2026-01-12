@@ -97,7 +97,7 @@ class RemoteSensingSegDataset(VisionDataset):
             if not isinstance(self.img_names, list) :
                 raise ValueError(f"客户端{cid}的{self.split}必须是列表类型")
 
-            print(f"客户端{cid} {self.split} 文件数：{len(self.img_names)}")
+            # print(f"客户端{cid} {self.split} 文件数：{len(self.img_names)}")
 
 
 
