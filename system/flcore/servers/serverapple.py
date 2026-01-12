@@ -64,8 +64,7 @@ class APPLE(Server):
         # self.print_(max(self.rs_test_acc), max(
         #     self.rs_train_acc), min(self.rs_train_loss))
         print(max(self.rs_test_acc))
-        print("\nAverage time cost per round.")
-        print(sum(self.Budget[1:])/len(self.Budget[1:]))
+        print(f"\nAverage time cost per round: {sum(self.Budget[1:]) / len(self.Budget[1:]):.4f} s")
 
         self.save_results()
 

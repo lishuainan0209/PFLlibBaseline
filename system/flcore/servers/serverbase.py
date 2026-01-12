@@ -157,6 +157,7 @@ class Server(object):
             os.makedirs(model_path)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         torch.save(self.global_model, model_path)
+        print("model saved to {}".format(model_path))
 
     def load_model(self):
         model_path = os.path.join("models", self.dataset)
@@ -178,7 +179,7 @@ class Server(object):
         if (len(self.rs_test_acc)):
             algo = algo + "_" + self.goal + "_" + str(self.times)
             file_path = result_path + "{}.h5".format(algo)
-            print("File path: " + file_path)
+            print("result File path: " + file_path)
 
             with h5py.File(file_path, 'w') as hf:
                 hf.create_dataset('rs_test_acc', data=self.rs_test_acc)

@@ -46,7 +46,7 @@ class FedProto(Server):
             self.send_protos()
 
             self.Budget.append(time.time() - s_t)
-            print('time cost:', self.Budget[-1], '-'*25)
+            print( f'time cost:{self.Budget[-1]:.4f}')
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break

@@ -98,7 +98,7 @@ class FedAS(Server):
             self.aggregate_wrt_fisher()
 
             self.Budget.append(time.time() - s_t)
-            print( 'time cost:', self.Budget[-1], '-'*25)
+            print( f'time cost:{self.Budget[-1]:.4f}')
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break
@@ -107,8 +107,7 @@ class FedAS(Server):
         # self.print_(max(self.rs_test_acc), max(
         #     self.rs_train_acc), min(self.rs_train_loss))
         print(max(self.rs_test_acc))
-        print("\nAverage time cost per round.")
-        print(sum(self.Budget[1:])/len(self.Budget[1:]))
+        print(f"\nAverage time cost per round: {sum(self.Budget[1:]) / len(self.Budget[1:]):.4f} s")
 
         print(f'+++++++++++++++++++++++++++++++++++++++++')
         gen_acc = self.avg_generalization_metrics()

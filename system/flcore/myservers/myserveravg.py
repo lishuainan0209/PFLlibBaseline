@@ -2,7 +2,7 @@ import  json
 import os
 import time
 
-import h5py
+
 import numpy as np
 
 from flcore.myclients.myclientavg import LoveDA2021RuralClient
@@ -73,7 +73,7 @@ class LoveDA2021RuralFedAvg(Server):
                 print(f"\nStep 4: Evaluate  model in client (after aggregation),")
                 self.evaluate()
             self.Budget.append(time.time() - s_t)
-            print('time cost:', self.Budget[-1])
+            print( f'time cost:{self.Budget[-1]:.4f}')
             print("#"*64)
 
             # if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
@@ -81,9 +81,9 @@ class LoveDA2021RuralFedAvg(Server):
         print("\n\n")
         for key in self.per_round_metrics_results:
             if "test_" in key:
-                print(f"Best {key:<26}:", max(self.per_round_metrics_results[key]))
+                print(f"{key:<26}: min:{min(self.per_round_metrics_results[key]):.8f}   max:{max(self.per_round_metrics_results[key]):.8f}", )
 
-        print("\nAverage time cost per round:", sum(self.Budget[1:]) / len(self.Budget[1:]))
+        print(f"\nAverage time cost per round: {sum(self.Budget[1:]) / len(self.Budget[1:]):.4f} s")
 
         self.save_results()
         self.save_global_model()
@@ -102,10 +102,10 @@ class LoveDA2021RuralFedAvg(Server):
             os.makedirs(result_path)
 
         file_path = os.path.join(result_path,f"{jsonName}.json")
-        print("File path: " + file_path)
-        # todo 不好用, 改为json吧
+
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(self.per_round_metrics_results, f, ensure_ascii=False, indent=4)
+        print("result File path: " + file_path)
 
     def evaluate(self, acc=None, loss=None):
         # 服务端本地评估
@@ -136,6 +136,7 @@ class LoveDA2021RuralFedAvg(Server):
         # 训练集
         # todo 这个只能所有用户都参与, 如果是挑选部分, 这个就不行了
         ids, num_samples, total_metrics, total_stats = self.train_metrics()
+        print("\n")
         total_samples = sum(num_samples)
         w = np.array(num_samples) / total_samples  # 每个客户端的权重
         # 遍历提取值
@@ -159,6 +160,7 @@ class LoveDA2021RuralFedAvg(Server):
         print("\n")
         # 测试集
         ids, num_samples, total_metrics, total_stats = self.test_metrics()
+        print("\n")
         total_samples = sum(num_samples)
         w = np.array(num_samples) / total_samples  # 每个客户端的权重
         # 遍历提取值
