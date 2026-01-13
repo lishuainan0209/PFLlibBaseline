@@ -1,11 +1,12 @@
 # 将文件夹中图片按照联邦客户端数量划分成数据集,图片名作为标识
-import os
 import json
-from typing import List, Dict
+import os
 import random
+from typing import List, Dict
+
+
 # todo 固定随机种子
 # 支持的图片/标签文件后缀（LoveDA数据集格式）
-
 
 
 def load_split_files(data_dir: str, split: str) -> List[str]:
@@ -29,14 +30,13 @@ def load_split_files(data_dir: str, split: str) -> List[str]:
     # 筛选图片文件，并确保对应label存在
     img_filenames = []
     for filename in os.listdir(img_dir):
-        if filename.startswith('.'): #跳过隐藏文件
+        if filename.startswith('.'):  # 跳过隐藏文件
             continue
         if filename.lower().endswith('.png'):
             # 检查对应的label是否存在
             label_path = os.path.join(label_dir, filename)
             if os.path.exists(label_path):
                 img_filenames.append(filename)
-
 
     # 排序（保证划分结果可复现）
     img_filenames.sort()
@@ -63,7 +63,6 @@ def split_files_equally(filenames: List[str], client_num: int) -> List[List[str]
 
     splits = []
     start = 0
-    # todo
     random.shuffle(filenames)
     for i in range(client_num):
         end = start + base_num + (1 if i < remainder else 0)
@@ -72,7 +71,7 @@ def split_files_equally(filenames: List[str], client_num: int) -> List[List[str]
     return splits
 
 
-def save_client_split_to_json(client_data: Dict,  DATASET_ROOT,JSON_NAME):
+def save_client_split_to_json(client_data: Dict, DATASET_ROOT, JSON_NAME):
     """将客户端划分结果保存为JSON"""
     # 创建保存目录（若不存在）
     save_path = os.path.join(DATASET_ROOT, JSON_NAME)
@@ -87,15 +86,13 @@ def save_client_split_to_json(client_data: Dict,  DATASET_ROOT,JSON_NAME):
     print(f"划分结果已保存至：{save_path}")
 
 
-
-
-
 # 直接右键运行即可, 无需配置,pycharm会自动以该py所在文件夹为工作目录
 if __name__ == "__main__":
     # -------------------------- 配置参数（按需修改） --------------------------
+    # 2021LoveDA_Rural   2021LoveDA_Urban
     DATASET_ROOT = r"2021LoveDA_Rural/"  # 数据集根目录
     # todo 加上server验证集以及划分
-    CLIENT_NUM = 256  # 联邦学习客户端数量
+    CLIENT_NUM = 16  # 联邦学习客户端数量
     JSON_NAME = r"2021LoveDA_Rural.json"  # 结果保存路径
 
     # 1. 读取train和test集的文件列表
@@ -109,11 +106,14 @@ if __name__ == "__main__":
 
     # 3. 构造每个客户端的train/test文件映射
     client_split_data = {}
-    client_split_data["info"]={"desc":"随意均分",}
+    client_split_data["info"] = {
+        "desc": "随意均分",
+        "num_clients": CLIENT_NUM,
+    }
     for client_idx in range(CLIENT_NUM):
-        client_name = f"{client_idx}" #转成json后, 会自动变成str,不如直接变
+        client_name = f"{client_idx}"  # 转成json后, 会自动变成str,不如直接变
         client_split_data[client_name] = {
-            "other":"可以放一些其他数据, 如是否慢速训练等",
+            "other": "可以放一些其他数据, 如是否慢速训练等",
             "train": train_splits[client_idx],
             "test": test_splits[client_idx]
         }
@@ -121,4 +121,4 @@ if __name__ == "__main__":
         print(f"{client_name} - train: {len(train_splits[client_idx])}个文件 | test: {len(test_splits[client_idx])}个文件")
 
     # 4. 保存为JSON
-    save_client_split_to_json(client_split_data, DATASET_ROOT,JSON_NAME)
+    save_client_split_to_json(client_split_data, DATASET_ROOT, JSON_NAME)

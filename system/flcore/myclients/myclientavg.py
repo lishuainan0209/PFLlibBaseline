@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from sklearn.metrics import cohen_kappa_score
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from flcore.clients.clientbase import Client
 from utils.datasets import RemoteSensingSegDataset
@@ -45,8 +46,8 @@ class LoveDA2021RuralClient(Client):
 
     def train(self):
         trainloader = self.load_train_data()
-        print(f"train client : {self.id},train_samples num: {self.train_samples} ")
-        # self.model.to(self.device)
+
+        self.model.to(self.device)
         self.model.train()
 
         start_time = time.time()
@@ -57,25 +58,22 @@ class LoveDA2021RuralClient(Client):
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
 
         for epoch in range(max_local_epochs):
-            for i, (x, y) in enumerate(trainloader):
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
-                y = y.to(self.device)
+            for images, labels in tqdm(trainloader, desc=f"train client {self.id}", leave=False):
+                images = images.to(self.device)
+                labels = labels.to(self.device)
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
-                output = self.model(x)
-                loss = self.loss(output, y)
+                output = self.model(images)
+                loss = self.loss(output, labels)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-
-        # self.model.cpu()
-
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
 
+        # 训练完成后，快速迁移到CPU
+        self.model.cpu()
+        print(f"train client : {self.id},train_samples num: {self.train_samples}, cost time: {time.time() - start_time:.2f} s  ")
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
 
@@ -111,85 +109,119 @@ class LoveDA2021RuralClient(Client):
             # FN: 标签为cls但预测不是cls
             stats['fn'][cls] += (~pred_cls & label_cls).sum()
 
+    def cohen_kappa_score_gpu(self,y_true, y_pred, num_classes):
+        """
+        纯 GPU 实现的 Cohen's Kappa 系数计算（无 CPU 拷贝，并行计算）
+        :param y_true: GPU 张量，形状 (N,)，标签值（整数）
+        :param y_pred: GPU 张量，形状 (N,)，预测值（整数）
+        :param num_classes: 总类别数（int）
+        :return: Kappa 系数（GPU 张量，标量）
+        """
+        # 确保输入是 GPU 上的长整型张量
+        y_true = y_true.long().to(self.device)
+        y_pred = y_pred.long().to(self.device)
+
+        # 1. 计算混淆矩阵（GPU 并行）
+        conf_mat = torch.bincount(
+            num_classes * y_true + y_pred,
+            minlength=num_classes ** 2
+        ).reshape(num_classes, num_classes)
+
+        # 2. 计算观测一致率 Po（对角线总和 / 总样本数）
+        total_samples = conf_mat.sum()
+        if total_samples == 0:
+            return torch.tensor(0.0, device=self.device)
+        po = torch.diag(conf_mat).sum() / total_samples
+
+        # 3. 计算期望一致率 Pe（行和 × 列和 的总和 / 总样本数²）
+        row_sum = conf_mat.sum(dim=1)  # 每行和（真实类别数）
+        col_sum = conf_mat.sum(dim=0)  # 每列和（预测类别数）
+        pe = (row_sum * col_sum).sum() / (total_samples ** 2)
+
+        # 4. 计算 Kappa 系数（避免除以 0）
+        kappa = torch.where(
+            (1 - pe) > 1e-6,
+            (po - pe) / (1 - pe),
+            torch.tensor(0.0, device=self.device)
+        )
+        return kappa
+
     def _compute_metrics_from_stats(self, stats, num_classes, total_samples):
-        """
-        基于累计的基础统计量计算最终指标
-        """
-        # 1. 总体准确率 OA
-        oa = stats['correct_pixels'] / stats['total_pixels'] if stats['total_pixels'] > 0 else 0.0
+        # 1. 计时：数据拷贝+张量转换
+        t0 = time.time()
+        # 【原张量转换代码】
+        tp = torch.tensor(stats['tp'], dtype=torch.float32, device=self.device)
+        fp = torch.tensor(stats['fp'], dtype=torch.float32, device=self.device)
+        fn = torch.tensor(stats['fn'], dtype=torch.float32, device=self.device)
+        correct_pixels = torch.tensor(stats['correct_pixels'], dtype=torch.float32, device=self.device)
+        total_pixels = torch.tensor(stats['total_pixels'], dtype=torch.float32, device=self.device)
+        total_loss = torch.tensor(stats['total_loss'], dtype=torch.float32, device=self.device)
+        total_samples = torch.tensor(total_samples, dtype=torch.float32, device=self.device)
+        t1 = time.time()
+        # print(f"数据拷贝+张量转换耗时：{t1 - t0:.4f}s")
 
-        # 2. 类别级PA、Precision、Recall
-        pa_per_class = []
-        precision_per_class = []
-        recall_per_class = []
-        iou_per_class = []
+        # 2. 计时：GPU 指标计算
+        oa = torch.where(total_pixels > 0, correct_pixels / total_pixels, torch.tensor(0.0, device=self.device))
+        cls_total = tp + fn
+        pa_per_class = torch.where(cls_total > 0, tp / cls_total, torch.tensor(0.0, device=self.device))
+        precision_denominator = tp + fp
+        precision_per_class = torch.where(precision_denominator > 0, tp / precision_denominator, torch.tensor(0.0, device=self.device))
+        recall_denominator = tp + fn
+        recall_per_class = torch.where(recall_denominator > 0, tp / recall_denominator, torch.tensor(0.0, device=self.device))
+        iou_denominator = tp + fp + fn
+        iou_per_class = torch.where(iou_denominator > 0, tp / iou_denominator, torch.tensor(0.0, device=self.device))
+        mpa = torch.mean(pa_per_class) if pa_per_class.numel() > 0 else torch.tensor(0.0, device=self.device)
+        miou = torch.mean(iou_per_class) if iou_per_class.numel() > 0 else torch.tensor(0.0, device=self.device)
+        precision = torch.mean(precision_per_class) if precision_per_class.numel() > 0 else torch.tensor(0.0, device=self.device)
+        recall = torch.mean(recall_per_class) if recall_per_class.numel() > 0 else torch.tensor(0.0, device=self.device)
+        f1_denominator = precision + recall
+        f1 = torch.where(f1_denominator > 0, 2 * (precision * recall) / f1_denominator, torch.tensor(0.0, device=self.device))
+        t2 = time.time()
+        # print(f"GPU 指标计算耗时：{t2 - t1:.4f}s")
 
-        for cls in range(num_classes):
-            tp = stats['tp'][cls]
-            fp = stats['fp'][cls]
-            fn = stats['fn'][cls]
+        # 3. 计时：Kappa 系数（核心瓶颈）
+        # todo 太费时间了
+        # kappa=0
+        # ===================== 优化后的 Kappa 系数计算（GPU 版） =====================
+        # try:
+        #     # 1. 将 pred/label 转为 GPU 张量（仅 1 次拷贝，耗时 < 0.01s）
+        #     pred_flatten = torch.tensor(stats['pred_flatten'], device=self.device)
+        #     label_flatten = torch.tensor(stats['label_flatten'], device=self.device)
+        #     # 2. 调用 GPU 版 Kappa 函数（核心优化）
+        #     kappa = self.cohen_kappa_score_gpu(label_flatten, pred_flatten, num_classes)
+        # except Exception as e:
+        #     print(f"Kappa 计算出错：{e}")
+        #     kappa = torch.tensor(0.0, device=self.device)
+        t3 = time.time()
+        # print(f"Kappa 系数计算耗时：{t3 - t2:.4f}s")
+        # 4. 平均损失 + 结果转回 CPU
+        avg_loss = torch.where(total_samples > 0, total_loss / total_samples, torch.tensor(0.0, device=self.device))
+        t4 = time.time()
+        print("precision_per_class",precision_per_class)
+        res = {
+            "avg_loss": avg_loss.cpu().item(),
+            "precision": precision.cpu().item(),
+            "oa": oa.cpu().item(),
+            "mpa": mpa.cpu().item(),
+            "miou": miou.cpu().item(),
 
-            # PA: 该类正确数 / 该类总标签数
-            cls_total = tp + fn
-            if cls_total > 0:
-                pa_per_class.append(tp / cls_total)
-            else:
-                pa_per_class.append(0.0)
-
-            # Precision: TP/(TP+FP)
-            if tp + fp > 0:
-                precision_per_class.append(tp / (tp + fp))
-            else:
-                precision_per_class.append(0.0)
-
-            # Recall: TP/(TP+FN)
-            if tp + fn > 0:
-                recall_per_class.append(tp / (tp + fn))
-            else:
-                recall_per_class.append(0.0)
-
-            # IoU: TP/(TP+FP+FN)
-            if tp + fp + fn > 0:
-                iou_per_class.append(tp / (tp + fp + fn))
-            else:
-                iou_per_class.append(0.0)
-
-        # 3. 平均指标
-        mpa = np.mean(pa_per_class) if pa_per_class else 0.0
-        miou = np.mean(iou_per_class) if iou_per_class else 0.0
-        precision = np.mean(precision_per_class) if precision_per_class else 0.0
-        recall = np.mean(recall_per_class) if recall_per_class else 0.0
-        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-
-        # 4. Kappa系数
-        try:
-            kappa = cohen_kappa_score(stats['pred_flatten'], stats['label_flatten'])
-        except:
-            kappa = 0.0
-
-        # 5. 平均损失
-        avg_loss = stats["total_loss"] / total_samples if total_samples > 0 else 0.0
-
-        return {
-            "avg_loss": avg_loss,
-            "oa": oa,
-            "mpa": mpa,
-            "miou": miou,
-            "precision": precision,
-            "recall": recall,
-            "f1": f1,
-            "kappa": kappa
+            "recall": recall.cpu().item(),
+            "f1": f1.cpu().item(),
+            # "precision_per_class":precision_per_class.cpu().tolist(),
+            # "kappa": kappa.cpu().item(),
+            "kappa": 0
         }
-
+        # print(f"\n client {self.id} 计算评价指标耗时：{t4 - t0:.4f} s\n")
+        return res
     # 评价指标
     def test_metrics(self):
 
         test_data_loader = self.load_test_data()
-        print(f"test_metrics client: {self.id}, test_samples num: {self.test_samples} ")
+
         # self.model = self.load_model('model')
         self.model.to(self.device)
         self.model.eval()
-
+        start_time = time.time()
         # 初始化基础统计量（仅累计，不计算指标）
         stats = {
             "total_pixels": 0,
@@ -205,7 +237,7 @@ class LoveDA2021RuralClient(Client):
         total_samples = 0  # 客户端本地样本总数
 
         with torch.no_grad():
-            for images, labels in test_data_loader:  # tqdm(self.test_loader, desc="Test"):
+            for images, labels in tqdm(test_data_loader, desc=f"test_metrics client {self.id}", leave=False):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
 
@@ -219,18 +251,23 @@ class LoveDA2021RuralClient(Client):
                 # 遍历每个样本，累计基础统计量
                 for pred, label in zip(preds, labels):
                     self._accumulate_base_stats(pred, label, self.num_classes, stats)
-
+        # 计算完成后，快速迁移到CPU
+        self.model.cpu()
         metrics = self._compute_metrics_from_stats(stats, self.num_classes, total_samples)
-
-        # 返回：样本数、客户端最终指标,基础统计量
-        return total_samples, metrics, stats
+        # todo 计算出来的metrics保存起来, 每一轮和上一次进行比较,显示出来增加或者减少
+        print(f"test_metrics client: {self.id}, test_samples num: {self.test_samples}, cost_time: {time.time() - start_time:.2f} s \n{metrics} \n")
+        # 返回：样本数、客户端最终指标,基础统计量, stats会把内存吃完, 导致程序停止, 先不返回
+        # return total_samples, metrics, stats
+        return total_samples, metrics, {}
 
     def train_metrics(self):
         train_data_loader = self.load_train_data()
-        print(f"train_metrics client: {self.id}, train_samples num: {self.train_samples} ")
+
         # self.model = self.load_model('model')
+        # print(self.device)
         self.model.to(self.device)
         self.model.eval()
+        start_time = time.time()
         # 初始化基础统计量
         stats = {
             "total_pixels": 0,
@@ -246,7 +283,7 @@ class LoveDA2021RuralClient(Client):
         total_samples = 0  # 客户端本地样本总数
 
         with torch.no_grad():
-            for images, labels in train_data_loader:  # tqdm(self.train_loader, desc="Test"):
+            for images, labels in tqdm(train_data_loader, desc=f"train_metrics client {self.id}", leave=False):
                 images = images.to(self.device)
                 labels = labels.to(self.device)
 
@@ -262,80 +299,10 @@ class LoveDA2021RuralClient(Client):
                     self._accumulate_base_stats(pred, label, self.num_classes, stats)
 
         metrics = self._compute_metrics_from_stats(stats, self.num_classes, total_samples)
-
-        # todo 加上时间消耗
-        # self.train_time_cost['num_rounds'] += 1
-        # self.train_time_cost['total_cost'] += time.time() - start_time
-        # 返回：样本数、客户端最终指标,基础统计量
-        return total_samples, metrics, stats
-
-    # todo 训练完进行保存
-
-    def _compute_segmentation_metrics(self, pred, label, num_classes):
-        """
-        计算单张图像的分割评价指标
-        Args:
-            pred: 预测的类别图 (H,W) tensor
-            label: 真实标签图 (H,W) tensor
-            num_classes: 类别总数
-        Returns:
-            单样本的各类指标：pa, mpa, miou, precision, recall, f1, oa, kappa
-        """
-        # 转换为numpy数组（方便计算）
-        pred_np = pred.cpu().numpy().flatten()
-        label_np = label.cpu().numpy().flatten()
-
-        # 1. 总体准确率 (Overall Accuracy, OA)
-        oa = (pred_np == label_np).sum() / len(label_np)
-
-        # 2. 像素准确率 (Pixel Accuracy, PA)、平均像素准确率 (mPA)
-        pa_per_class = []
-        # 3. IoU 与 mIoU（复用原有逻辑）
-        iou_per_class = []
-        # 4. 精确率 (Precision)、召回率 (Recall)、F1-Score
-        precision_per_class = []
-        recall_per_class = []
-
-        for cls in range(num_classes):
-            # 该类的预测/标签掩码
-            pred_cls = (pred_np == cls)
-            label_cls = (label_np == cls)
-
-            # PA：该类正确预测的像素数 / 该类总像素数
-            cls_total = label_cls.sum()
-            if cls_total > 0:
-                pa_per_class.append((pred_cls & label_cls).sum() / cls_total)
-
-            # IoU
-            intersection = (pred_cls & label_cls).sum()
-            union = (pred_cls | label_cls).sum()
-            if union > 0:
-                iou_per_class.append(intersection / union)
-
-            # Precision (精确率)：TP/(TP+FP)
-            pred_cls_total = pred_cls.sum()
-            if pred_cls_total > 0:
-                precision_per_class.append(intersection / pred_cls_total)
-            else:
-                precision_per_class.append(0.0)  # 无预测为该类时精确率为0
-
-            # Recall (召回率)：TP/(TP+FN)
-            if cls_total > 0:
-                recall_per_class.append(intersection / cls_total)
-            else:
-                recall_per_class.append(0.0)  # 无该类标签时召回率为0
-
-        # 计算各类指标的均值
-        mpa = np.mean(pa_per_class) if pa_per_class else 0.0
-        miou = np.mean(iou_per_class) if iou_per_class else 0.0
-        precision = np.mean(precision_per_class) if precision_per_class else 0.0
-        recall = np.mean(recall_per_class) if recall_per_class else 0.0
-        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-
-        # 5. Kappa系数（可选，衡量分类一致性）
-        try:
-            kappa = cohen_kappa_score(pred_np, label_np)
-        except:
-            kappa = 0.0  # 极端情况（如只有一个类别）避免报错
-
-        return pa_per_class, mpa, miou, precision, recall, f1, oa, kappa
+        # 训练完成后，快速迁移到CPU
+        self.model.cpu()
+        # todo 计算出来的metrics保存起来, 每一轮和上一次进行比较,显示出来增加或者减少
+        print(f"train_metrics client: {self.id}, train_samples num: {self.train_samples},cost_time: {time.time() - start_time:.2f} s \n{metrics} \n")
+        # 返回：样本数、客户端最终指标,基础统计量,stats会把内存吃完, 导致程序停止, 先不返回
+        # return total_samples, metrics, stats
+        return total_samples, metrics, {}

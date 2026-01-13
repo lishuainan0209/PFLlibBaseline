@@ -1,10 +1,14 @@
+import json
 import os
 from typing import Optional, Callable, List, Tuple
-import json
-from PIL import Image
-from torchvision.datasets import VisionDataset
-from torchvision import transforms
 
+import numpy as np
+import torch
+from PIL import Image
+from torchvision import transforms
+from torchvision.datasets import VisionDataset
+
+DATASET_COLLECTION_PATH="../dataset"
 class RemoteSensingSegDataset(VisionDataset):
     """
     自定义遥感语义分割数据集（继承VisionDataset）
@@ -34,19 +38,20 @@ class RemoteSensingSegDataset(VisionDataset):
         # 需要用其转换成限向量, 否则__getitem__会出现TypeError: default_collate: batch must contain tensors, numpy arrays, numbers, dicts or lists; found <class 'PIL.Image.Image'>
         if transform is None:
             transform = transforms.Compose([transforms.ToTensor()])
-        if target_transform is None:
-            target_transform = transforms.Compose([transforms.ToTensor()])
+        # ToTensor() 归一化，把 1-255缩放到 0~1 区间,是给图片用的, 不是给标签用的
+        # if target_transform is None:
+        #     target_transform = transforms.Compose([transforms.ToTensor()])
         # 调用父类VisionDataset初始化（必须）
-        super().__init__(os.path.join("../dataset",dataset_name), transform=transform, target_transform=target_transform)
+        super().__init__(os.path.join(DATASET_COLLECTION_PATH, dataset_name), transform=transform, target_transform=target_transform)
 
         self.split = split
         self.img_suffix = img_suffix
-        self.data_conf_json_path = os.path.join("../dataset",dataset_name, data_conf_json)
+        self.data_conf_json_path = os.path.join(DATASET_COLLECTION_PATH, dataset_name, data_conf_json)
         self.client_id = client_id
-        self.img_names=[]
+        self.img_names = []
         # 1. 定义images和labels的路径
-        self.images_dir = os.path.join("../dataset",dataset_name, split, "images")
-        self.labels_dir = os.path.join("../dataset",dataset_name, split, "labels")
+        self.images_dir = os.path.join(DATASET_COLLECTION_PATH, dataset_name, split, "images")
+        self.labels_dir = os.path.join(DATASET_COLLECTION_PATH, dataset_name, split, "labels")
 
         # 校验路径是否存在
         if not os.path.exists(self.images_dir):
@@ -62,10 +67,10 @@ class RemoteSensingSegDataset(VisionDataset):
         #       "client_1":{"train": ["1.png","1.png"],"test": ["1.png","1.png"],"val": ["1.png","1.png"],},
         #       "client_2": {"train": ["1.png", "1.png"], "test": ["1.png", "1.png"], "val": ["1.png", "1.png"], },
         # }
-        split_data_conf=None
+        split_data_conf = None
 
         # 没有节点名,获取所有该路径下文件名
-        if self.client_id is  None:
+        if self.client_id is None:
             self.img_names = [f for f in os.listdir(self.images_dir) if f.endswith(self.img_suffix)]
             # 过滤掉无对应掩码的图像
             self.img_names = [f for f in self.img_names if os.path.exists(os.path.join(self.labels_dir, f))]
@@ -94,12 +99,10 @@ class RemoteSensingSegDataset(VisionDataset):
             self.img_names = client_data[self.split]
 
             # 5. 校验字段类型（确保是列表）
-            if not isinstance(self.img_names, list) :
+            if not isinstance(self.img_names, list):
                 raise ValueError(f"客户端{cid}的{self.split}必须是列表类型")
 
             # print(f"客户端{cid} {self.split} 文件数：{len(self.img_names)}")
-
-
 
     def __len__(self) -> int:
         """返回成对的样本总数"""
@@ -126,7 +129,10 @@ class RemoteSensingSegDataset(VisionDataset):
             img = self.transform(img)
 
         # 4. 应用标签掩码变换（需和图片变换同步，比如同尺寸缩放）
-        if self.target_transform is not None:
+
+        if self.target_transform is None:
+            label = torch.from_numpy(np.array(label, dtype=np.int64))
+        else:
             label = self.target_transform(label)
         label = label.squeeze().long()  # 掩码转为LongTensor（交叉熵损失要求）
         return img, label

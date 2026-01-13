@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 
 
-# 完整的FCN8s网络（无预训练、纯手动构建）
+# 完整的FCN8s网络（含全量参数初始化）
 class FCN8s(nn.Module):
     def __init__(self, num_classes=8):
         super(FCN8s, self).__init__()
         self.num_classes = num_classes
-        # todo 每一层参数初始化的赋值问题,正态分布赋值
+
         # -------------------------- 1. 手动构建VGG16的特征提取部分（无预训练） --------------------------
         self.pool1 = nn.Sequential(
             # 第1组：Conv+Conv+Pool (pool1)
@@ -71,17 +72,32 @@ class FCN8s(nn.Module):
         self.pool3_conv = nn.Conv2d(256, num_classes, kernel_size=1)
         self.pool4_conv = nn.Conv2d(512, num_classes, kernel_size=1)
 
-        # -------------------------- 4. 上采样层（优化padding + 初始化权重） --------------------------
+        # -------------------------- 4. 上采样层 --------------------------
         self.upsample2x = nn.ConvTranspose2d(num_classes, num_classes, kernel_size=2, stride=2, bias=False)
-        # 优化：添加padding=1，适配非8倍数的输入尺寸
         self.upsample8x = nn.ConvTranspose2d(num_classes, num_classes, kernel_size=8, stride=8, bias=False)
 
-        # 关键：初始化转置卷积权重（提升训练收敛速度）
+        # -------------------------- 5. 全量参数初始化 --------------------------
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        """
+        统一初始化所有层的参数：
+        - Conv2d/ConvTranspose2d：kaiming_normal（适配ReLU，fan_out模式）
+        - Bias：恒为0（避免初始偏置引入噪声）
+        """
         for m in self.modules():
-            if isinstance(m, nn.ConvTranspose2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+            if isinstance(m, nn.Conv2d):
+                # Kaiming正态初始化（适配ReLU激活，fan_out保证前向传播梯度稳定）
+                init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # 偏置初始化为0
+                if m.bias is not None:
+                    init.constant_(m.bias, 0.0)
+            elif isinstance(m, nn.ConvTranspose2d):
+                # 转置卷积同样用Kaiming初始化（上采样层需保证梯度流畅）
+                init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0.0)
+            # MaxPool2d/ReLU/Dropout无参数，无需初始化
 
     def forward(self, x):
         input_h, input_w = x.size()[2], x.size()[3]
@@ -112,19 +128,21 @@ class FCN8s(nn.Module):
         x = self.upsample8x(x)
         x = x[:, :, :input_h, :input_w]  # 最终尺寸对齐
         return x
-    def save_model_parameters(self,checkpoint_path:str,*args,**kwargs):
-        """根据文件进行模型保存"""
-        torch.save({
-            "epoch": kwargs["epoch"],
-            "model_state_dict": self.state_dict(),
-            "optimizer_state_dict": kwargs["optimizer"].state_dict(),
-            "best_mIoU": kwargs["best_test_mIoU"],
-        }, checkpoint_path)
 
-    # todo 用于验证的main
-    def load_model_parameters(self,checkpoint_path:str,*args,**kwargs):
-        """根据路径加载模型"""
-        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))  # 先加载到CPU，避免设备不匹配
-        self.load_state_dict(checkpoint["model_state_dict"])
-        # 5. （可选）预测/验证时，设置模型为评估模式
-        self.eval()
+    # def save_model_parameters(self, checkpoint_path: str, *args, **kwargs):
+    #     """根据文件进行模型保存"""
+    #     torch.save({
+    #         "epoch": kwargs["epoch"],
+    #         "model_state_dict": self.state_dict(),
+    #         "optimizer_state_dict": kwargs["optimizer"].state_dict(),
+    #         "best_mIoU": kwargs["best_test_mIoU"],
+    #     }, checkpoint_path)
+    #
+    # def load_model_parameters(self, checkpoint_path: str, *args, **kwargs):
+    #     """根据路径加载模型"""
+    #     checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))  # 先加载到CPU，避免设备不匹配
+    #     self.load_state_dict(checkpoint["model_state_dict"])
+    #     # 预测/验证时，设置模型为评估模式
+    #     self.eval()
+
+
