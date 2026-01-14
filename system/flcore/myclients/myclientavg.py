@@ -14,7 +14,7 @@ class LoveDA2021RuralClient(Client):
     def __init__(self, args, id, train_samples=0, test_samples=0, **kwargs):
         super().__init__(args, id, train_samples, test_samples, train_slow=False, send_slow=False, **kwargs)
         self.data_conf_json = args.data_conf_json
-
+    #     todo train_slow和 send_slow要基于模型大小,宽带(百兆,千兆,参数设置), ping 某个网站的返回毫秒数(或者参数设置RTT,高斯随机, 高于某个值就代表离线), 建立一个数学模型,模拟网络延迟
     def load_train_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
@@ -73,7 +73,7 @@ class LoveDA2021RuralClient(Client):
 
         # 训练完成后，快速迁移到CPU
         self.model.cpu()
-        print(f"train client : {self.id},train_samples num: {self.train_samples}, cost time: {time.time() - start_time:.2f} s  ")
+        print(f"train client : {self.id:03d},train_samples num: {self.train_samples:04d}, cost time: {time.time() - start_time:.2f} s  ")
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
 
@@ -197,7 +197,8 @@ class LoveDA2021RuralClient(Client):
         # 4. 平均损失 + 结果转回 CPU
         avg_loss = torch.where(total_samples > 0, total_loss / total_samples, torch.tensor(0.0, device=self.device))
         t4 = time.time()
-        print("precision_per_class",precision_per_class)
+        print("precision_per_class",precision_per_class.tolist())
+        # todo 这些指标能大写的就大写
         res = {
             "avg_loss": avg_loss.cpu().item(),
             "precision": precision.cpu().item(),
@@ -255,7 +256,7 @@ class LoveDA2021RuralClient(Client):
         self.model.cpu()
         metrics = self._compute_metrics_from_stats(stats, self.num_classes, total_samples)
         # todo 计算出来的metrics保存起来, 每一轮和上一次进行比较,显示出来增加或者减少
-        print(f"test_metrics client: {self.id}, test_samples num: {self.test_samples}, cost_time: {time.time() - start_time:.2f} s \n{metrics} \n")
+        print(f"test_metrics client: {self.id:03d}, test_samples num: {self.test_samples:04d}, cost_time: {time.time() - start_time:.2f} s \n{metrics} \n")
         # 返回：样本数、客户端最终指标,基础统计量, stats会把内存吃完, 导致程序停止, 先不返回
         # return total_samples, metrics, stats
         return total_samples, metrics, {}
@@ -302,7 +303,7 @@ class LoveDA2021RuralClient(Client):
         # 训练完成后，快速迁移到CPU
         self.model.cpu()
         # todo 计算出来的metrics保存起来, 每一轮和上一次进行比较,显示出来增加或者减少
-        print(f"train_metrics client: {self.id}, train_samples num: {self.train_samples},cost_time: {time.time() - start_time:.2f} s \n{metrics} \n")
+        print(f"train_metrics client: {self.id:03d}, train_samples num: {self.train_samples:04d},cost_time: {time.time() - start_time:.2f} s \n{metrics} \n")
         # 返回：样本数、客户端最终指标,基础统计量,stats会把内存吃完, 导致程序停止, 先不返回
         # return total_samples, metrics, stats
         return total_samples, metrics, {}

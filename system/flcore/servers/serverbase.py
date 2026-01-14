@@ -158,7 +158,22 @@ class Server(object):
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         torch.save(self.global_model, model_path)
         print("model saved to {}".format(model_path))
-
+    # todo 模型保存重新写
+    # def save_model_parameters(self, checkpoint_path: str, *args, **kwargs):
+    #     """根据文件进行模型保存"""
+    #     torch.save({
+    #         "epoch": kwargs["epoch"],
+    #         "model_state_dict": self.state_dict(),
+    #         "optimizer_state_dict": kwargs["optimizer"].state_dict(),
+    #         "best_mIoU": kwargs["best_test_mIoU"],
+    #     }, checkpoint_path)
+    #
+    # def load_model_parameters(self, checkpoint_path: str, *args, **kwargs):
+    #     """根据路径加载模型"""
+    #     checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))  # 先加载到CPU，避免设备不匹配
+    #     self.load_state_dict(checkpoint["model_state_dict"])
+    #     # 预测/验证时，设置模型为评估模式
+    #     self.eval()
     def load_model(self):
         model_path = os.path.join("models", self.dataset)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")

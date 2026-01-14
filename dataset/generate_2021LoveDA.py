@@ -5,6 +5,7 @@ import random
 from typing import List, Dict
 
 
+# todo json中,增加总体像素的比例, 每个子集的占比
 # todo 固定随机种子
 # 支持的图片/标签文件后缀（LoveDA数据集格式）
 
@@ -58,7 +59,7 @@ def split_files_equally(filenames: List[str], client_num: int) -> List[List[str]
         raise ValueError("客户端数量必须大于0")
 
     total = len(filenames)
-    base_num = total // client_num
+    base_num = total  # client_num
     remainder = total % client_num
 
     splits = []
@@ -107,8 +108,45 @@ if __name__ == "__main__":
     # 3. 构造每个客户端的train/test文件映射
     client_split_data = {}
     client_split_data["info"] = {
-        "desc": "随意均分",
-        "num_clients": CLIENT_NUM,
+        # 1. 数据集基础信息
+        "dataset_name": "2021LoveDA_Rural",  # 数据集名称（必填）
+        "version": "v1.0",  # 数据集版本
+        "release_date": "2021-08",  # 发布日期
+        "source": "Wuhan University",  # 来源机构
+        "desc": "2021LoveDA是遥感影像语义分割领域的经典基准，包含城市/农村两类场景,本数据集是农村场景",  # 数据集描述（你已有的内容）
+
+        # 2. 数据规格信息（LoveDA核心属性）
+        "total_images": 12000,  # 总影像数量
+        # "image_size": "512×512",  # 单张影像尺寸
+        "resolution": "0.3m/pixel",  # 遥感影像分辨率
+        # "scene_types": ["urban", "rural"],  # 场景类型（LoveDA的城乡划分）
+        # "urban_images": 6000,  # 城市场景影像数
+        # "rural_images": 6000,  # 农村场景影像数
+
+        # 3. 类别信息（解决标签映射问题）
+        "num_classes": 8,  # 地物类别数
+        "class_names": [  # 类别名称（按模型类别0-7对应）
+            "Background", "Building", "Road", "Water",
+            "Vegetation", "Agriculture", "Railway", "Vehicle"
+        ],
+        # "class_mapping": {  # 原始标签与模型类别的映射（你之前踩坑的点）
+        #     "original_label_range": "1-8",
+        #     "model_label_range": "0-7",
+        #     "mapping_rule": "original_label - 1 = model_label"
+        # },
+
+        # 4. 划分&联邦信息
+        "num_clients": CLIENT_NUM,  # 总客户端数
+        # "client_split_strategy": "按场景+地域划分（每个客户端对应部分城乡影像）",  # 客户端划分策略
+        # "data_split": {  # 全局数据集划分（train/val/test）
+        #     "train_images": 8000,
+        #     "val_images": 2000,
+        #     "test_images": 2000
+        # },
+
+        # 5. 数据格式说明（避免解析错误）
+        "image_format": "PNG (RGB 3通道)",  # 影像格式
+        "label_format": "PNG (单通道灰度图)"  # 标签格式
     }
     for client_idx in range(CLIENT_NUM):
         client_name = f"{client_idx}"  # 转成json后, 会自动变成str,不如直接变

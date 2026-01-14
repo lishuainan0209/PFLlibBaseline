@@ -422,7 +422,7 @@ def get_args():
     parser.add_argument("-go", "--goal", type=str, default="test", help="实验目标：如 'test'（测试）、'train'（训练）、'privacy_analysis'（隐私分析）等", )
     parser.add_argument("-sd", "--seed", type=int, default=0, help="随机数种子：固定种子保证实验可复现")
     parser.add_argument("-dev", "--device", type=str, default="cuda", choices=["cpu", "cuda"], help="训练设备：cpu/cuda（优先用GPU）")
-    parser.add_argument("-did", "--device_id", type=str, default="0", help="GPU卡号（多GPU场景）：如 '0'（单卡）、'0,1'（多卡），仅device=cuda时生效")
+    parser.add_argument("-did", "--device_id", type=str, default="0", help="GPU卡号（多GPU场景）：如 '0'（单卡）、'0,1'（多卡），仅device=cuda时生效") # todo 多卡机训练改造
 
     # ===================== 2. 数据集相关 =====================
     parser.add_argument("-data", "--dataset", type=str, default="2021LoveDA_Rural", help="数据集名称：如 MNIST/CIFAR10/Shakespeare/AG_News 等")
@@ -534,7 +534,7 @@ def get_args():
 
 
 if __name__ == "__main__":
-    print("start FL ")
+
     set_seed(12)
     total_start = time.time()
     args = get_args()
@@ -547,12 +547,26 @@ if __name__ == "__main__":
         print("\ncuda is not avaiable.\n")
         args.device = "cpu"
 
+    start_time_str = time.strftime("%Y-%m-%d %H:%M:%S")
+    print("FL start :",start_time_str)
+
     print("=" * 50)
     for arg in vars(args):
         print(arg, "=", getattr(args, arg))
     print("=" * 50)
 
     run(args)
+    print("#" * 50)
+    end_time_str = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"FL run in \n{start_time_str} to\n{end_time_str}  ")
 
-    # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
-    # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")
+    run_seconds = time.time()-total_start
+    total_seconds = int(run_seconds)  # 取整（忽略毫秒）
+    days = total_seconds // 86400  # 1天=86400秒
+    remaining = total_seconds % 86400
+    hours = remaining // 3600  # 1小时=3600秒
+    remaining = remaining % 3600
+    minutes = remaining // 60  # 1分钟=60秒
+    seconds = remaining % 60  # 剩余秒数
+    time_str = f"{days}days {hours:02d}:{minutes:02d}:{seconds:02d} "
+    print(f"\nTotal time cost: {run_seconds:.2f} s.  {time_str}")

@@ -54,6 +54,7 @@ class LoveDA2021RuralFedAvg(Server):
             if  i % self.eval_gap == 0:
                 print(f"\nStep 2: Evaluate Local model  in client,")
                 self.evaluate()
+            #     todo 多卡机改造, 用线程
             # threads = [Thread(target=client.train)
             #            for client in self.selected_clients]
             # [t.start() for t in threads]
@@ -86,6 +87,7 @@ class LoveDA2021RuralFedAvg(Server):
         print(f"\nAverage time cost per round: {sum(self.Budget[1:]) / len(self.Budget[1:]):.4f} s")
 
         self.save_results()
+        # todo 断电模型保护问题
         self.save_global_model()
 
         # if self.num_new_clients > 0:

@@ -1,6 +1,6 @@
 from statistics import mean
 import numpy as np
-
+# 用于分析文件日志
 file_name = input() + '.out'
 
 acc = []
