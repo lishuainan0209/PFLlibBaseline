@@ -1,4 +1,7 @@
 import copy
+import time
+from time import sleep
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -16,12 +19,17 @@ class Client(object):
 
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         torch.manual_seed(0)
-        self.model = copy.deepcopy(args.model)
+        self.model = copy.deepcopy(args.model) # todo 每个客户端持有模型,若模型过大且客户端过多, 会导致内存狂涨,到100%,然后进程被杀死
+        print("copy")
+
         self.algorithm = args.algorithm
         self.dataset = args.dataset
+        self.train_dataloader=None
+        self.test_dataloader=None
+        self.val_dataloader=None
         self.device = args.device
         self.id = id  # integer
-        self.save_folder_name = args.save_folder_name
+        # self.save_folder_name = args.save_folder_name # 客户端模型保存路径
 
         self.num_classes = args.num_classes
         self.train_samples = train_samples
@@ -56,16 +64,20 @@ class Client(object):
 
 
     def load_train_data(self, batch_size=None):
-        if batch_size == None:
-            batch_size = self.batch_size
-        train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
-        return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
+        if self.train_dataloader is  None:
+            if batch_size == None:
+                batch_size = self.batch_size
+            train_data = read_client_data(self.dataset, self.id, is_train=True, few_shot=self.few_shot)
+            self.train_dataloader = DataLoader(train_data, batch_size, drop_last=False, shuffle=True)
+        return self.train_dataloader
 
     def load_test_data(self, batch_size=None):
-        if batch_size == None:
-            batch_size = self.batch_size
-        test_data = read_client_data(self.dataset, self.id, is_train=False, few_shot=self.few_shot)
-        return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
+        if self.test_dataloader is None:
+            if batch_size == None:
+                batch_size = self.batch_size
+            test_data = read_client_data(self.dataset, self.id, is_train=False, few_shot=self.few_shot)
+            self.test_dataloader = DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
+        return self.test_dataloader
         
     def set_parameters(self, model):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):
@@ -147,34 +159,15 @@ class Client(object):
 
         return losses, train_num
 
-    # def get_next_train_batch(self):
-    #     try:
-    #         # Samples a new batch for persionalizing
-    #         (x, y) = next(self.iter_trainloader)
-    #     except StopIteration:
-    #         # restart the generator if the previous generator is exhausted.
-    #         self.iter_trainloader = iter(self.trainloader)
-    #         (x, y) = next(self.iter_trainloader)
-
-    #     if type(x) == type([]):
-    #         x = x[0]
-    #     x = x.to(self.device)
-    #     y = y.to(self.device)
-
-    #     return x, y
 
 
-    def save_item(self, item, item_name, item_path=None):
-        if item_path == None:
-            item_path = self.save_folder_name
-        if not os.path.exists(item_path):
-            os.makedirs(item_path)
-        torch.save(item, os.path.join(item_path, "client_" + str(self.id) + "_" + item_name + ".pt"))
+    def save_client_model(self,save_dir=None):
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        torch.save(self.model, os.path.join(save_dir, f"{self.id:02d}-client.pt"))
 
-    def load_item(self, item_name, item_path=None):
-        if item_path == None:
-            item_path = self.save_folder_name
-        return torch.load(os.path.join(item_path, "client_" + str(self.id) + "_" + item_name + ".pt"))
+    def load_client_model(self, save_dir):
+        return torch.load(os.path.join(save_dir, os.path.join(save_dir, f"{self.id:02d}-client.pt")))
 
     # @staticmethod
     # def model_exists():

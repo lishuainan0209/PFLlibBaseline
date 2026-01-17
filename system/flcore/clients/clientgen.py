@@ -49,7 +49,7 @@ class clientGen(Client):
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                if self.train_slow:
+                if self.train_slow:# todo 别真睡,所有sleep改为在total_cost加上一个值?
                     time.sleep(0.1 * np.abs(np.random.rand()))
                 output = self.model(x)
                 loss = self.loss(output, y)

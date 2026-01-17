@@ -107,7 +107,7 @@ class RemoteSensingSegDataset(VisionDataset):
     def __len__(self) -> int:
         """返回成对的样本总数"""
         return len(self.img_names)
-
+    # todo 图片裁剪,小patch训练
     def __getitem__(self, index: int) -> Tuple[Image.Image, Image.Image]:
         """
         根据索引获取单个样本（语义分割场景）

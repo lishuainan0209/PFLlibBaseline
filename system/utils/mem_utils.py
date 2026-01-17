@@ -156,6 +156,7 @@ class MemReporter():
             if target_device is not None and device != target_device:
                 continue
             # print('-' * LEN)
+            # todo 模型在用完之后, 我都挪到gpu上了, 这种统计方式不会统计模型大小,最后需要单独统计模型大小
             print('\nStorage on {}'.format(device))
             total_mem = 0
             total_numel = 0

@@ -57,7 +57,7 @@ class FedProx(Server):
         print(f"\nAverage time cost per round: {sum(self.Budget[1:]) / len(self.Budget[1:]):.4f} s")
 
         self.save_results()
-        self.save_global_model()
+        self.save_server_model()
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True

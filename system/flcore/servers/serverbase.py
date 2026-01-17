@@ -31,7 +31,7 @@ class Server(object):
         self.time_select = args.time_select
         self.goal = args.goal
         self.time_threthold = args.time_threthold
-        self.save_folder_name = args.save_folder_name
+        self.save_folder_name = args.save_folder_name if args.save_folder_name is not None else os.path.join("../results",time.strftime("%Y-%m-%d_%H%M%S"))
         self.top_cnt = args.top_cnt
         self.auto_break = args.auto_break
 
@@ -151,13 +151,12 @@ class Server(object):
         for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
             server_param.data += client_param.data.clone() * w
 
-    def save_global_model(self):
-        model_path = os.path.join("../models", self.dataset)
-        if not os.path.exists(model_path):
-            os.makedirs(model_path)
-        model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+    def save_server_model(self,save_dir):
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        model_path = os.path.join(save_dir, "00-server.pt")
         torch.save(self.global_model, model_path)
-        print("model saved to {}".format(model_path))
+        print("server model saved to {}".format(model_path))
     # todo 模型保存重新写
     # def save_model_parameters(self, checkpoint_path: str, *args, **kwargs):
     #     """根据文件进行模型保存"""
@@ -174,17 +173,15 @@ class Server(object):
     #     self.load_state_dict(checkpoint["model_state_dict"])
     #     # 预测/验证时，设置模型为评估模式
     #     self.eval()
+
+    # todo 根据 save_server_model 重写
     def load_model(self):
         model_path = os.path.join("models", self.dataset)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
 
-    def model_exists(self):
-        model_path = os.path.join("models", self.dataset)
-        model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
-        return os.path.exists(model_path)
-        
+    # todo 重写
     def save_results(self):
         algo = self.dataset + "_" + self.algorithm
         result_path = "../results/"
@@ -201,13 +198,13 @@ class Server(object):
                 hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
 
-    def save_item(self, item, item_name):
-        if not os.path.exists(self.save_folder_name):
-            os.makedirs(self.save_folder_name)
-        torch.save(item, os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
-
-    def load_item(self, item_name):
-        return torch.load(os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
+    # def save_item(self, item, item_name):
+    #     if not os.path.exists(self.save_folder_name):
+    #         os.makedirs(self.save_folder_name)
+    #     torch.save(item, os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
+    #
+    # def load_item(self, item_name):
+    #     return torch.load(os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
 
     def test_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:

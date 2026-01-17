@@ -1,7 +1,6 @@
-import  json
+import json
 import os
 import time
-
 
 import numpy as np
 
@@ -38,7 +37,7 @@ class LoveDA2021RuralFedAvg(Server):
             print(f"\nRound number: {i}")
 
             # 零. 首轮发送模型, 评估旧模型（基线）
-            if i == 0 :
+            if i == 0:
                 self.send_models()
                 print("\nEvaluate initial global model in client")
                 self.evaluate()
@@ -51,7 +50,7 @@ class LoveDA2021RuralFedAvg(Server):
 
             # 二.本地模型训练效果评估
             # 如果做个性化, 加入这步?; 做全局模型, 注释本步
-            if  i % self.eval_gap == 0:
+            if i % self.eval_gap == 0:
                 print(f"\nStep 2: Evaluate Local model  in client,")
                 self.evaluate()
             #     todo 多卡机改造, 用线程
@@ -60,22 +59,27 @@ class LoveDA2021RuralFedAvg(Server):
             # [t.start() for t in threads]
             # [t.join() for t in threads]
 
-
             # 三. 聚合模型,发送之
             print(f"\nStep 3: receive_models, aggregate_parameters, send_models, ")
             self.receive_models()
             if self.dlg_eval and i % self.dlg_gap == 0:
                 self.call_dlg(i)
             self.aggregate_parameters()
+
+            # 保存各自的模型
+            # todo 断点保存轮次
+            # if i % self.eval_gap == 0:
+            #     self.save_results() # todo 是否个性化涉及是否保存客户端的
+
             self.send_models()
 
             # 四. 评价聚合后的新模型
-            if  i % self.eval_gap == 0:
+            if i % self.eval_gap == 0:
                 print(f"\nStep 4: Evaluate  model in client (after aggregation),")
                 self.evaluate()
             self.Budget.append(time.time() - s_t)
-            print( f'time cost:{self.Budget[-1]:.4f}')
-            print("#"*64)
+            print(f'time cost:{self.Budget[-1]:.4f}')
+            print("#" * 64)
 
             # if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
             #     break
@@ -87,8 +91,6 @@ class LoveDA2021RuralFedAvg(Server):
         print(f"\nAverage time cost per round: {sum(self.Budget[1:]) / len(self.Budget[1:]):.4f} s")
 
         self.save_results()
-        # todo 断电模型保护问题
-        self.save_global_model()
 
         # if self.num_new_clients > 0:
         #     self.eval_new_clients = True
@@ -98,16 +100,19 @@ class LoveDA2021RuralFedAvg(Server):
         #     self.evaluate()
 
     def save_results(self):
-        jsonName = self.dataset + "_" + self.algorithm + "_" + self.goal + "_" + str(self.times)
-        result_path = "../results/"
-        if not os.path.exists(result_path):
-            os.makedirs(result_path)
+        save_dir = os.path.join("../results", self.save_folder_name)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
 
-        file_path = os.path.join(result_path,f"{jsonName}.json")
-
+        # 保存评价指标
+        jsonName = "per_round_metrics_results.json"
+        file_path = os.path.join(save_dir, jsonName)
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(self.per_round_metrics_results, f, ensure_ascii=False, indent=4)
         print("result File path: " + file_path)
+        self.save_server_model(save_dir=save_dir)# 保存服务端模型
+        for client in self.clients:
+            client.save_client_model(save_dir=save_dir) # 保存客户端模型
 
     def evaluate(self, acc=None, loss=None):
         # 服务端本地评估
@@ -150,8 +155,8 @@ class LoveDA2021RuralFedAvg(Server):
 
         for key in metrics_keys:
             avg, avg_std = (np.array(metrics_dict[key]) * w).sum(), (np.array(metrics_dict[key]) * w).std()
-            print(f"{'Train avg_'+key:<28}: {avg:.9f}")
-            print(f"{'Train avg_'+key+'_std':<28}: {avg_std:.9f}")
+            print(f"{'Train avg_' + key:<28}: {avg:.9f}")
+            print(f"{'Train avg_' + key + '_std':<28}: {avg_std:.9f}")
             if f"train_avg_{key}" not in self.per_round_metrics_results.keys():
                 self.per_round_metrics_results[f"train_avg_{key}"] = []
             self.per_round_metrics_results[f"train_avg_{key}"].append(avg)
@@ -173,8 +178,8 @@ class LoveDA2021RuralFedAvg(Server):
                 metrics_dict[key].append(metric.get(key, None))
         for key in metrics_keys:
             avg, avg_std = (np.array(metrics_dict[key]) * w).sum(), (np.array(metrics_dict[key]) * w).std()
-            print(f"{'Test avg_'+key:<28}: {avg:.9f}")
-            print(f"{'Test avg_'+key+'_std':<28}: {avg_std:.9f}")
+            print(f"{'Test avg_' + key:<28}: {avg:.9f}")
+            print(f"{'Test avg_' + key + '_std':<28}: {avg_std:.9f}")
             if f"test_avg_{key}" not in self.per_round_metrics_results.keys():
                 self.per_round_metrics_results[f"test_avg_{key}"] = []
             self.per_round_metrics_results[f"test_avg_{key}"].append(avg)

@@ -59,7 +59,7 @@ def split_files_equally(filenames: List[str], client_num: int) -> List[List[str]
         raise ValueError("客户端数量必须大于0")
 
     total = len(filenames)
-    base_num = total  # client_num
+    base_num = total // client_num
     remainder = total % client_num
 
     splits = []
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     # 2021LoveDA_Rural   2021LoveDA_Urban
     DATASET_ROOT = r"2021LoveDA_Rural/"  # 数据集根目录
     # todo 加上server验证集以及划分
-    CLIENT_NUM = 16  # 联邦学习客户端数量
+    CLIENT_NUM = 512  # 联邦学习客户端数量
     JSON_NAME = r"2021LoveDA_Rural.json"  # 结果保存路径
 
     # 1. 读取train和test集的文件列表
@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     # 3. 构造每个客户端的train/test文件映射
     client_split_data = {}
-    client_split_data["info"] = {
+    client_split_data["dataset_info"] = {
         # 1. 数据集基础信息
         "dataset_name": "2021LoveDA_Rural",  # 数据集名称（必填）
         "version": "v1.0",  # 数据集版本
@@ -119,6 +119,16 @@ if __name__ == "__main__":
         "total_images": 12000,  # 总影像数量
         # "image_size": "512×512",  # 单张影像尺寸
         "resolution": "0.3m/pixel",  # 遥感影像分辨率
+
+
+
+
+
+
+
+
+
+
         # "scene_types": ["urban", "rural"],  # 场景类型（LoveDA的城乡划分）
         # "urban_images": 6000,  # 城市场景影像数
         # "rural_images": 6000,  # 农村场景影像数
@@ -152,8 +162,12 @@ if __name__ == "__main__":
         client_name = f"{client_idx}"  # 转成json后, 会自动变成str,不如直接变
         client_split_data[client_name] = {
             "other": "可以放一些其他数据, 如是否慢速训练等",
+            # todo 单独配置?
+            "train_slow": True if client_idx % 10 == 0 else False,
+            "send_slow": True if client_idx % 10 == 0 else False,
             "train": train_splits[client_idx],
-            "test": test_splits[client_idx]
+            "test": test_splits[client_idx],
+
         }
         # 打印每个客户端的分配情况
         print(f"{client_name} - train: {len(train_splits[client_idx])}个文件 | test: {len(test_splits[client_idx])}个文件")

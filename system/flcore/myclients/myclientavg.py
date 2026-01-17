@@ -14,10 +14,12 @@ class LoveDA2021RuralClient(Client):
     def __init__(self, args, id, train_samples=0, test_samples=0, **kwargs):
         super().__init__(args, id, train_samples, test_samples, train_slow=False, send_slow=False, **kwargs)
         self.data_conf_json = args.data_conf_json
+        self.class_w=[]
     #     todo train_slow和 send_slow要基于模型大小,宽带(百兆,千兆,参数设置), ping 某个网站的返回毫秒数(或者参数设置RTT,高斯随机, 高于某个值就代表离线), 建立一个数学模型,模拟网络延迟
     def load_train_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
+        #     todo 从data_conf_json读取每个客户端配置?还是单独配置json?
         train_data = RemoteSensingSegDataset(dataset_name=self.dataset,  # 数据集根路径（如"你的遥感数据集路径"）
                                              split="train",  # 选择数据集划分：train/val/test
                                              transform=None,  # 图片变换（Resize、ToTensor等）
@@ -71,7 +73,7 @@ class LoveDA2021RuralClient(Client):
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
 
-        # 训练完成后，快速迁移到CPU
+        # 训练完成后，快速迁移到CPU,不然gpu内存一直占着不用回暴涨然后outofmemory,程序死亡
         self.model.cpu()
         print(f"train client : {self.id:03d},train_samples num: {self.train_samples:04d}, cost time: {time.time() - start_time:.2f} s  ")
         self.train_time_cost['num_rounds'] += 1

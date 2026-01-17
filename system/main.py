@@ -8,7 +8,9 @@ import warnings
 
 import numpy as np
 import torchvision
+from torchinfo import summary  # 核心函数
 
+from flcore.myservers.myserveravg import LoveDA2021RuralFedAvg
 from flcore.servers.serverala import FedALA
 from flcore.servers.serveramp import FedAMP
 from flcore.servers.serverapfl import APFL
@@ -49,7 +51,7 @@ from flcore.servers.serverprox import FedProx
 from flcore.servers.serverrep import FedRep
 from flcore.servers.serverrod import FedROD
 from flcore.servers.serverscaffold import SCAFFOLD
-from flcore.myservers.myserveravg import LoveDA2021RuralFedAvg
+from flcore.trainmodel.FCN import *
 # 模型
 from flcore.trainmodel.alexnet import *
 from flcore.trainmodel.bilstm import *
@@ -57,10 +59,8 @@ from flcore.trainmodel.mobilenet_v2 import *
 from flcore.trainmodel.models import *
 from flcore.trainmodel.resnet import *
 from flcore.trainmodel.transformer import *
-from flcore.trainmodel.FCN import *
 # 工具
 from utils.mem_utils import MemReporter
-from utils.result_utils import average_data
 from utils.tool import set_seed
 
 logger = logging.getLogger()
@@ -73,7 +73,6 @@ def run(args):
     time_list = []
     mem_reporter = MemReporter()
     model_str = args.model
-    # todo 每次循环都会产生新的模型以及服务端, 是否有必要修改该逻辑
     for i in range(args.prev, args.times):
         print("", "@" * 40)
         print(f"Running time: {i}th ", "=" * 10)
@@ -391,6 +390,7 @@ def run(args):
         else:
             raise NotImplementedError
         # 进行训练
+        # todo 参数量totalsummary
         server.train()
 
         time_list.append(time.time() - start)
@@ -401,7 +401,19 @@ def run(args):
     # average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
 
     print("All done!")
-
+    summary(
+        args.model,
+        input_size=(args.batch_size, 3, 1024, 1024),  # batch_size=32，输入3通道32x32图片
+        # device=device.type,          # 指定设备
+        verbose=1,  # 输出详细程度（0=极简，1=标准，2=最全）
+        col_names=["input_size",
+                   "output_size",
+                   "num_params",
+                   "params_percent",
+                   "kernel_size",
+                   "mult_adds",
+                   "trainable", ]  # 要显示的列
+    )
     mem_reporter.report()
 
 
@@ -410,6 +422,7 @@ def get_args():
     nohup python main.py --seed=0 --device_id=0 \
     --num_clients=10 \
     --global_rounds=4 --local_epochs=2 --batch_size=4 \
+    --save_folder_name=$(date +%Y%m%d_%H%M%S)      \
         > $(date +%Y%m%d_%H%M%S).log 2>&1 &
 
         nohup python main.py --seed=0 --device_id=0  > $(date +%Y%m%d_%H%M%S).log 2>&1 &
@@ -422,7 +435,7 @@ def get_args():
     parser.add_argument("-go", "--goal", type=str, default="test", help="实验目标：如 'test'（测试）、'train'（训练）、'privacy_analysis'（隐私分析）等", )
     parser.add_argument("-sd", "--seed", type=int, default=0, help="随机数种子：固定种子保证实验可复现")
     parser.add_argument("-dev", "--device", type=str, default="cuda", choices=["cpu", "cuda"], help="训练设备：cpu/cuda（优先用GPU）")
-    parser.add_argument("-did", "--device_id", type=str, default="0", help="GPU卡号（多GPU场景）：如 '0'（单卡）、'0,1'（多卡），仅device=cuda时生效") # todo 多卡机训练改造
+    parser.add_argument("-did", "--device_id", type=str, default="0", help="GPU卡号（多GPU场景）：如 '0'（单卡）、'0,1'（多卡），仅device=cuda时生效")  # todo 多卡机训练改造
 
     # ===================== 2. 数据集相关 =====================
     parser.add_argument("-data", "--dataset", type=str, default="2021LoveDA_Rural", help="数据集名称：如 MNIST/CIFAR10/Shakespeare/AG_News 等")
@@ -430,7 +443,7 @@ def get_args():
     parser.add_argument("-ncl", "--num_classes", type=int, default=8, help="数据集类别数：MNIST=10，CIFAR10=10，Shakespeare=80（文本）等")
 
     # ===================== 3. 客户端调度相关 =====================
-    parser.add_argument("-nc", "--num_clients", type=int, default=16, help="联邦系统总客户端数量：静态联邦场景的基础规模")
+    parser.add_argument("-nc", "--num_clients", type=int, default=2, help="联邦系统总客户端数量：静态联邦场景的基础规模")
     parser.add_argument("-nnc", "--num_new_clients", type=int, default=0, help="每轮新增客户端数：>0 时为动态联邦（模拟新设备加入）")
     parser.add_argument("-jr", "--join_ratio", type=float, default=1.0, help="每轮参与训练的客户端比例：0<jr≤1.0，1.0=全量参与，0.5=50%参与")
     parser.add_argument("-rjr", "--random_join_ratio", action="store_true", default=False,
@@ -439,7 +452,7 @@ def get_args():
     # ===================== 4. 联邦训练核心参数 =====================
     parser.add_argument("-pv", "--prev", type=int, default=0, help="断点续跑：之前中断的实验轮数，设置后从该轮继续训练（避免重复跑）")
     parser.add_argument("-t", "--times", type=int, default=1, help="实验重复次数：多次运行取平均，提升结果可靠性")
-    parser.add_argument("-gr", "--global_rounds", type=int, default=100, help="全局聚合轮数：一次实验的总联邦通信轮数")
+    parser.add_argument("-gr", "--global_rounds", type=int, default=2, help="全局聚合轮数：一次实验的总联邦通信轮数")
     parser.add_argument("-ls", "--local_epochs", type=int, default=2, help="客户端本地训练轮数：每轮联邦通信中，单个客户端本地训练的epoch数")
     parser.add_argument("-lbs", "--batch_size", type=int, default=4, help="客户端训练批次大小：每个batch的样本数量")
 
@@ -455,7 +468,7 @@ def get_args():
     parser.add_argument("-ab", "--auto_break", action="store_true", default=False, help="是否开启训练自动终止：Top N客户端性能稳定时停止，避免无效轮次")
     parser.add_argument("-tc", "--top_cnt", type=int, default=100, help="auto_break阈值：选取前N个客户端的性能判断是否终止（总客户端<N时取全部）")
     parser.add_argument("-eg", "--eval_gap", type=int, default=1, help="评估间隔轮数：每N轮联邦训练后，用测试集评估全局模型性能")
-    parser.add_argument("-sfn", "--save_folder_name", type=str, default="items", help="实验结果保存文件夹：存储模型参数、评估日志、DLG报告、训练记录等")
+    parser.add_argument("-sfn", "--save_folder_name", type=str, default=None, help="实验结果保存文件夹：存储模型参数、评估日志、DLG报告、训练记录等")
 
     # ===================== 7. 隐私分析（DLG） =====================
     parser.add_argument("-dlg", "--dlg_eval", action="store_true", default=False, help="是否开启DLG评估：通过梯度反推客户端数据，分析隐私泄露风险")
@@ -548,8 +561,8 @@ if __name__ == "__main__":
         args.device = "cpu"
 
     start_time_str = time.strftime("%Y-%m-%d %H:%M:%S")
-    print("FL start :",start_time_str)
-
+    print("FL start :", start_time_str)
+    # test_gpu = torch.zeros(size=(2, 1024)).cuda()  # 用于在nvitop上显示数据
     print("=" * 50)
     for arg in vars(args):
         print(arg, "=", getattr(args, arg))
@@ -558,9 +571,9 @@ if __name__ == "__main__":
     run(args)
     print("#" * 50)
     end_time_str = time.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"FL run in \n{start_time_str} to\n{end_time_str}  ")
+    print(f"FL run start_time to  end_time \n    start:{start_time_str}\n      end:{end_time_str}  ")
 
-    run_seconds = time.time()-total_start
+    run_seconds = time.time() - total_start
     total_seconds = int(run_seconds)  # 取整（忽略毫秒）
     days = total_seconds // 86400  # 1天=86400秒
     remaining = total_seconds % 86400
@@ -568,5 +581,5 @@ if __name__ == "__main__":
     remaining = remaining % 3600
     minutes = remaining // 60  # 1分钟=60秒
     seconds = remaining % 60  # 剩余秒数
-    time_str = f"{days}days {hours:02d}:{minutes:02d}:{seconds:02d} "
+    time_str = f"{days:02d}days {hours:02d}:{minutes:02d}:{seconds:02d} "
     print(f"\nTotal time cost: {run_seconds:.2f} s.  {time_str}")
